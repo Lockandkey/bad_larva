@@ -3,6 +3,7 @@ import os
 import sc2reader
 from dotenv import load_dotenv
 import datetime
+import statistics
 
 
 def get_all_replays(replay_dir):
@@ -36,9 +37,14 @@ def parse_replay(path_to_replay, target_player=None):
     print("Map name:", replay.map_name)
     print(f"{replay.real_type} Game lasted {replay.game_length}:", )
 
+    player_dict = {}
+    name_length = 0
+    name_diff = 0
+
     # Iterate through players
     for player in replay.players:
         print(f"Player: {player.name}, {player.pick_race}")
+        player_dict[player.name] = []
 
     for event in replay.events:
         actual_time = convert_event_second_to_real_time(event.second)
@@ -47,9 +53,13 @@ def parse_replay(path_to_replay, target_player=None):
                 if target_player not in str(event.player):
                     continue
             oversupply_percent = ((event.food_made / event.food_used) * 100) - 100
-            print(f"{actual_time} | Supply: {event.food_used} / {event.food_made} ({str(oversupply_percent)[:3]}% oversupplied) ")
+            print(f"{event.player.name} - {str(event.player.pick_race)[0]} | {actual_time} | Supply: {event.food_used} / {event.food_made} ({str(oversupply_percent)[:3]}% oversupplied) ")
+            player_dict[event.player.name].append(oversupply_percent)
         # else:
         #     print(f"type - {type(event)} | {event}")
+
+    for player in player_dict:
+        print(f"{player} average oversupply: {str(statistics.fmean(player_dict[player]))[:2].replace('.', '')}%")
 
 
 def __main__():
