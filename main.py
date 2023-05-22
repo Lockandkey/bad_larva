@@ -49,10 +49,6 @@ def parse_replay(path_to_replay, target_player=None):
         larva_count = 0
 
         for event in replay.events:
-            # debug todo remove this
-            if event.second == 1022:
-                break
-
             actual_time = convert_event_second_to_real_time(event.second)
 
             if isinstance(event, sc2reader.events.tracker.UnitBornEvent):
