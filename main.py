@@ -38,8 +38,6 @@ def parse_replay(path_to_replay, target_player=None):
     print(f"{replay.real_type} Game lasted {replay.game_length}:", )
 
     player_dict = {}
-    name_length = 0
-    name_diff = 0
 
     # Iterate through players
     for player in replay.players:
@@ -47,24 +45,63 @@ def parse_replay(path_to_replay, target_player=None):
         player_dict[player.name] = []
 
         larva_count = 0
+        larva_over_10 = False
+
+        hatch_count = 0  # todo get this working
+
+        bad_larva_ranges = [{
+            'larva_start_time': 0,
+            'larva_end_time': 0,
+            'larva_max': 3,
+            'event': 'no_event',
+        }]
+        larva_max = 0
+        larva_start = 0
+        larva_end = 0
 
         for event in replay.events:
             actual_time = convert_event_second_to_real_time(event.second)
+            # if event.second > 1000:  # debug todo remove
+            #     break
 
             if isinstance(event, sc2reader.events.tracker.UnitBornEvent):
-                print(event)
+                # print(event)  # debug
                 if event.unit_type_name == "Larva":
                     larva_count += 1
             if isinstance(event, sc2reader.events.tracker.UnitDiedEvent):
-                print(event)
+                # print(event)  # debug
                 if "Larva" in str(event.unit):
                     larva_count -= 1
             if isinstance(event, sc2reader.events.tracker.UnitTypeChangeEvent):
-                print(event)
+                # print(event)  # debug
                 if "Larva" in str(event.unit) and event.unit_type_name == "Egg":
                     larva_count -= 1
                 if "Larva" in str(event.unit) and event.unit_type_name == "Larva":
                     larva_count += 1
+
+            if larva_count > 9:  # larva over a bad threshold
+                if larva_over_10 is False:  # first time crossing past 9
+                    larva_start = event.second
+                if larva_max < larva_count:
+                    larva_max = larva_count
+                larva_over_10 = True
+            if (larva_count < 10 and larva_over_10 is True) or isinstance(event, sc2reader.events.game.PlayerLeaveEvent):  # larva has gone below max
+                if larva_start != event.second:
+                    bad_larva_ranges.append(
+                        {
+                            'larva_start_time': larva_start,
+                            'larva_end_time': event.second,
+                            'larva_max': larva_max,
+                            'event': event,
+                        }
+                    )
+                    larva_over_10 = False
+                    larva_max = 0
+                    larva_start = 0
+
+            # if isinstance(event, sc2reader.events.tracker.UnitDoneEvent):
+            #     if event.unit.name == 'Hatchery':
+            #         hatch_count += 1
 
             try:
                 if event.player == player:
@@ -80,11 +117,24 @@ def parse_replay(path_to_replay, target_player=None):
                         units = replay.get_units(unit_tags)
                         larva_count += sum(1 for unit in units if unit.name == "Larva")
             except AttributeError:
-                print(f"{type(event)} | {event}")  # debug
+                continue
+                # print(f"{type(event)} | {event}")  # debug
         # else:
         #     print(f"type - {type(event)} | {event}")
 
-        print("Larva count:", larva_count)
+            # print(f"Time: {convert_event_second_to_real_time(event.second)} | Larva: {larva_count}")
+            print(f"type - {type(event)} | {event}")
+
+
+        print(player.name)
+        print(f"Larva count: {larva_count}")
+        print(f"Hatch count: {hatch_count}")
+        print(f"Bad larva ranges:")
+        for bad in bad_larva_ranges:
+            duration = convert_event_second_to_real_time(bad['larva_end_time'] - bad['larva_start_time'])
+            start_time = convert_event_second_to_real_time(bad['larva_start_time'])
+            end_time = convert_event_second_to_real_time(bad['larva_end_time'])
+            print(f"Start: {start_time} / {bad['larva_start_time']} | End: {end_time} | Duration: {duration} | Peak larva: {bad['larva_max']} | EventType: {type(bad['event'])} | event: {bad['event']}")
 
     for player in player_dict:
         print(f"{player} average oversupply: {str(statistics.fmean(player_dict[player]))[:2].replace('.', '')}%")
