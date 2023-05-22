@@ -46,17 +46,49 @@ def parse_replay(path_to_replay, target_player=None):
         print(f"Player: {player.name}, {player.pick_race}")
         player_dict[player.name] = []
 
-    for event in replay.events:
-        actual_time = convert_event_second_to_real_time(event.second)
-        if type(event) == sc2reader.events.tracker.PlayerStatsEvent:
-            if target_player is not None:
-                if target_player not in str(event.player):
-                    continue
-            oversupply_percent = ((event.food_made / event.food_used) * 100) - 100
-            print(f"{event.player.name} - {str(event.player.pick_race)[0]} | {actual_time} | Supply: {event.food_used} / {event.food_made} ({str(oversupply_percent)[:3]}% oversupplied) ")
-            player_dict[event.player.name].append(oversupply_percent)
+        larva_count = 0
+
+        for event in replay.events:
+            # debug todo remove this
+            if event.second == 1022:
+                break
+
+            actual_time = convert_event_second_to_real_time(event.second)
+
+            if isinstance(event, sc2reader.events.tracker.UnitBornEvent):
+                print(event)
+                if event.unit_type_name == "Larva":
+                    larva_count += 1
+            if isinstance(event, sc2reader.events.tracker.UnitDiedEvent):
+                print(event)
+                if "Larva" in str(event.unit):
+                    larva_count -= 1
+            if isinstance(event, sc2reader.events.tracker.UnitTypeChangeEvent):
+                print(event)
+                if "Larva" in str(event.unit) and event.unit_type_name == "Egg":
+                    larva_count -= 1
+                if "Larva" in str(event.unit) and event.unit_type_name == "Larva":
+                    larva_count += 1
+
+            try:
+                if event.player == player:
+                    if isinstance(event, sc2reader.events.tracker.PlayerStatsEvent):
+                        oversupply_percent = ((event.food_made / event.food_used) * 100) - 100
+                        # print(f"{event.player.name} - {str(event.player.pick_race)[0]} | {actual_time} | Supply: {event.food_used} / {event.food_made} ({str(oversupply_percent)[:3]}% oversupplied) ")
+                        player_dict[event.player.name].append(oversupply_percent)
+                    # else:
+                    #     print(event)  # debug
+                if event.player.play_race == "Zerg" and event.player == player:
+                    if isinstance(event, sc2reader.events.game.GetControlGroupEvent):
+                        unit_tags = event.unit_tags
+                        units = replay.get_units(unit_tags)
+                        larva_count += sum(1 for unit in units if unit.name == "Larva")
+            except AttributeError:
+                print(f"{type(event)} | {event}")  # debug
         # else:
         #     print(f"type - {type(event)} | {event}")
+
+        print("Larva count:", larva_count)
 
     for player in player_dict:
         print(f"{player} average oversupply: {str(statistics.fmean(player_dict[player]))[:2].replace('.', '')}%")
